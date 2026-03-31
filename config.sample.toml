@@ -1,0 +1,156 @@
+# Discord LLM Translator Bot Configuration
+# ==========================================
+#
+# Copy this file to config.toml and fill in the required values.
+# All values can be set via environment variables as fallback (see below).
+#
+# IMPORTANT: Never commit config.toml to version control!
+
+# =============================================================================
+# REQUIRED SETTINGS
+# =============================================================================
+
+# Discord bot token
+# Get from: https://discord.com/developers/applications
+# Can also be set via environment variable: DISCORD_TOKEN
+discord_token = ""
+
+# OpenRouter API key
+# Get from: https://openrouter.ai/keys
+# Can also be set via environment variable: OPENROUTER_API_KEY
+openrouter_api_key = ""
+
+# =============================================================================
+# LLM SETTINGS
+# =============================================================================
+
+# LLM model to use for translations
+# IMPORTANT: Must be a model with ZDR (Zero Data Retention) policy on OpenRouter
+# Browse ZDR models: https://openrouter.ai/models?q=zdr
+# Recommended: google/gemini-2.5-flash (fast, cheap, good quality)
+model = "google/gemini-2.5-flash"
+
+# Global system prompt for translation requests
+# This prompt is used when no channel-specific prompt is defined.
+# Template variables available:
+#   {source_language} - The detected language of the message (ISO 639-1 code)
+#   {target_language} - The target language for translation (ISO 639-1 code)
+#
+# Example: "Translate from {source_language} to {target_language}"
+system_prompt = "Translate the following text from {source_language} to {target_language}. Preserve the original formatting, tone, and style as closely as possible. Only output the translation, nothing else."
+
+# Maximum number of characters to send to the LLM (to control costs)
+# Messages longer than this will be truncated before translation
+# Set to 0 to disable truncation
+max_chars = 10000
+
+# =============================================================================
+# REPLY MODE CHANNELS
+# =============================================================================
+#
+# In reply mode, the bot monitors a channel for messages not in the default
+# language, and replies with a translation. This is useful for channels where
+# users speak different languages and need on-demand translations.
+#
+# Example: A channel where the default language is English, but users post in
+# Spanish, French, etc. The bot will automatically reply with English translations.
+
+[[reply_channels]]
+
+# Channel ID (right-click channel in Discord > Copy Channel ID)
+# Note: Developer Mode must be enabled in Discord settings
+channel_id = 123456789012345678
+
+# Default language for this channel (ISO 639-1 code)
+# Messages NOT in this language will be translated
+# Common codes: en (English), es (Spanish), fr (French), de (German),
+#               zh (Chinese), ja (Japanese), ko (Korean), pt (Portuguese),
+#               ru (Russian), ar (Arabic), it (Italian), nl (Dutch), pl (Polish)
+default_language = "en"
+
+# Optional: Override the global system_prompt for this channel only
+# Leave empty to use the global system_prompt
+# system_prompt = "Use casual tone for this translation"
+
+[[reply_channels]]
+channel_id = 987654321098765432
+default_language = "es"
+
+# You can add more reply channels here...
+
+# =============================================================================
+# SYNC MODE CHELANNELS
+# =============================================================================
+#
+# In sync mode, you define groups of channels where each channel is in a
+# different language. When someone posts in any channel, the bot translates
+# that message and posts it to ALL OTHER channels in the group.
+#
+# Example: You have three channels: #general-en, #general-es, #general-fr
+# When someone posts in #general-en, the bot posts translations in
+# #general-es and #general-fr.
+
+[[sync_groups]]
+
+# Human-readable name for this sync group (used in logs only)
+name = "general-support"
+
+# Optional: Override the global system_prompt for ALL channels in this group
+# Leave empty to use the global system_prompt
+# system_prompt = "Use formal tone for support translations"
+
+# List of channels in this sync group
+channels = [
+    # Each channel needs its ID and the language it represents
+    { channel_id = 111111111111111111, language = "en" },
+    { channel_id = 222222222222222222, language = "es" },
+    { channel_id = 333333333333333333, language = "fr" },
+]
+
+[[sync_groups]]
+name = "gaming-lounge"
+
+channels = [
+    { channel_id = 444444444444444444, language = "en" },
+    { channel_id = 555555555555555555, language = "de" },
+    { channel_id = 666666666666666666, language = "ja" },
+]
+
+# You can add more sync groups here...
+
+# =============================================================================
+# OPTIONAL SETTINGS
+# =============================================================================
+
+# Rate limiting: minimum seconds between translations per user
+# Prevents spam; set lower for busier servers
+rate_limit_per_user_seconds = 3
+
+# Language detection confidence threshold (0.0 to 1.0)
+# Only translate if confidence is above this threshold
+# Lower = more aggressive translation, Higher = only translate when confident
+language_confidence_threshold = 0.7
+
+# Message to prepend to translated messages
+# Use {author} to mention the original author
+# Use {language} for the detected language name
+# Leave empty to disable
+translation_prefix = "**[{author}] Translated from {language}:**"
+
+# Whether to translate bot messages (usually no)
+translate_bot_messages = false
+
+# Whether to translate messages from webhook bots (usually no)
+translate_webhook_messages = false
+
+# =============================================================================
+# HOW TO FIND DISCORD CHANNEL IDS
+# =============================================================================
+#
+# 1. Enable Developer Mode in Discord:
+#    Settings > Advanced > Developer Mode > ON
+#
+# 2. Right-click on any channel
+#    Select "Copy Channel ID"
+#
+# 3. Paste the ID into this config file
