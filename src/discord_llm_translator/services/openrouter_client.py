@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
 
 import aiohttp
@@ -16,6 +17,8 @@ from discord_llm_translator.models.translation import (
     TranslationResult,
 )
 from discord_llm_translator.utils.formatting import get_language_name
+
+logger = logging.getLogger(__name__)
 
 
 class OpenRouterError(Exception):
@@ -90,9 +93,13 @@ class OpenRouterClient:
             OpenRouterError: If the API request fails.
             OpenRouterRateLimitError: If rate limited.
         """
+        source_lang = get_language_name(request.source_language)
+        target_lang = get_language_name(request.target_language)
+        logger.info(f"Calling OpenRouter API: {source_lang} → {target_lang} using model {self._model}")
+
         system_prompt = request.system_prompt.format(
-            source_language=get_language_name(request.source_language),
-            target_language=get_language_name(request.target_language),
+            source_language=source_lang,
+            target_language=target_lang,
         )
 
         messages: list[dict[str, str]] = [
@@ -116,7 +123,9 @@ class OpenRouterClient:
         last_error: Exception | None = None
         for attempt in range(self._max_retries):
             try:
-                return await self._make_request(headers, payload)
+                result = await self._make_request(headers, payload)
+                logger.info(f"Received translation from OpenRouter API")
+                return result
             except OpenRouterRateLimitError:
                 raise
             except OpenRouterError as e:
@@ -144,6 +153,8 @@ class OpenRouterClient:
                 headers=headers,
                 timeout=aiohttp.ClientTimeout(total=60),
             ) as response:
+                logger.debug(f"OpenRouter API response status: {response.status}")
+
                 if response.status == 429:
                     raise OpenRouterRateLimitError("Rate limited by OpenRouter API")
 

@@ -84,6 +84,9 @@ class TranslationHandler:
         if not message.content or not message.content.strip():
             return
 
+        logger.debug(f"Received message from {message.author.display_name} ({message.author.id}) "
+                     f"in channel {message.channel.id}: {message.content[:100]}")
+
         reply_config = self._config.get_reply_channel_config(message.channel.id)
         if reply_config is not None:
             await self._handle_reply_mode(message, reply_config)
@@ -100,6 +103,7 @@ class TranslationHandler:
     ) -> None:
         """Handle message in reply mode channel."""
         if not self._rate_limiter.is_allowed(message.author.id):
+            logger.debug(f"User {message.author.id} rate limited, skipping message {message.id}")
             return
 
         try:
@@ -108,7 +112,11 @@ class TranslationHandler:
             logger.debug(f"Language detection failed for message {message.id}: {e}")
             return
 
+        detected_lang_name = get_language_name(detection_result.language)
+        logger.info(f"Detected language: {detected_lang_name} (confidence: {detection_result.confidence:.2f})")
+
         if detection_result.language == channel_config.default_language:
+            logger.debug(f"Message {message.id} is already in target language, skipping")
             return
 
         self._rate_limiter.record_request(message.author.id)
@@ -118,6 +126,9 @@ class TranslationHandler:
             text_to_translate = truncate_text(text_to_translate, self._config.max_chars)
 
         system_prompt = self._config.get_system_prompt_for_channel(message.channel.id)
+        target_lang_name = get_language_name(channel_config.default_language)
+
+        logger.info(f"Translating message {message.id}: {detected_lang_name} → {target_lang_name}")
 
         request = TranslationRequest(
             text=text_to_translate,
@@ -132,12 +143,16 @@ class TranslationHandler:
             logger.error(f"Translation failed for message {message.id}: {e}")
             return
 
+        logger.debug(f"Translation result for message {message.id}: {result.translated_text}")
+
         await self._send_translation_reply(
             message=message,
             translated_text=result.translated_text,
-            detected_language=get_language_name(detection_result.language),
+            detected_language=detected_lang_name,
             author_name=message.author.display_name,
         )
+
+        logger.info(f"Posted translation reply to message {message.id} in channel {message.channel.id}")
 
     async def _handle_sync_mode(
         self,
@@ -148,6 +163,7 @@ class TranslationHandler:
         """Handle message in sync mode channel."""
         async with self._lock:
             if message.id in self._processed_messages:
+                logger.debug(f"Message {message.id} already processed, skipping")
                 return
             self._processed_messages.add(message.id)
 
@@ -156,6 +172,7 @@ class TranslationHandler:
                 self._processed_messages = set(list(self._processed_messages)[-500:])
 
         if not self._rate_limiter.is_allowed(message.author.id):
+            logger.debug(f"User {message.author.id} rate limited, skipping message {message.id}")
             return
 
         text_to_translate = message.content
@@ -169,6 +186,10 @@ class TranslationHandler:
         for target_channel_config in group_config.channels:
             if target_channel_config.channel_id == source_channel_config.channel_id:
                 continue
+
+            source_lang_name = get_language_name(source_channel_config.language)
+            target_lang_name = get_language_name(target_channel_config.language)
+            logger.info(f"Translating message {message.id} to {target_lang_name} for channel {target_channel_config.channel_id}")
 
             request = TranslationRequest(
                 text=text_to_translate,
@@ -197,6 +218,7 @@ class TranslationHandler:
         """Translate a message and send it to a target channel."""
         try:
             result = await self._openrouter_client.translate(translation_request)
+            logger.debug(f"Translation result for message {message.id} to channel {target_channel_id}: {result.translated_text}")
 
             target_channel = self._client.get_channel(target_channel_id)
             if not isinstance(target_channel, discord.TextChannel):
@@ -205,6 +227,7 @@ class TranslationHandler:
 
             translated_text = f"**[{message.author.display_name}] {result.translated_text}**"
             await target_channel.send(translated_text)
+            logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
 
         except Exception as e:
             logger.error(
