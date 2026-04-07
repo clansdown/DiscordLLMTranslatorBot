@@ -16,6 +16,7 @@ from discord_llm_translator.config import BotConfig
 from discord_llm_translator.cogs.translation import TranslationHandler
 from discord_llm_translator.services.language_detector import LanguageDetector
 from discord_llm_translator.services.openrouter_client import OpenRouterClient
+from discord_llm_translator.utils.formatting import get_language_name
 
 if TYPE_CHECKING:
     pass
@@ -65,7 +66,37 @@ class DiscordTranslatorBot:
         self._client.add_listener(self._on_ready, "on_ready")
         self._client.add_listener(self._translation_handler.on_message, "on_message")
 
+        self._log_configuration()
+
         logger.info("Bot setup complete")
+
+    def _log_configuration(self) -> None:
+        """Log the current configuration at startup."""
+        root_logger = logging.getLogger()
+        log_level = logging.getLevelName(root_logger.getEffectiveLevel())
+        logger.info(f"Log level: {log_level}")
+
+        logger.info(f"Model: {self._config.model}")
+        logger.info(f"Rate limit: {self._config.rate_limit_per_user_seconds} seconds per user")
+
+        if self._config.reply_channels:
+            logger.info("Reply channels:")
+            for channel_config in self._config.reply_channels:
+                lang_name = get_language_name(channel_config.default_language)
+                logger.info(f"  Channel {channel_config.channel_id} → {lang_name} ({channel_config.default_language})")
+        else:
+            logger.info("No reply channels configured")
+
+        if self._config.sync_groups:
+            logger.info("Sync groups:")
+            for group in self._config.sync_groups:
+                channel_list = ", ".join(
+                    f"#{config.channel_id} ({config.language})"
+                    for config in group.channels
+                )
+                logger.info(f"  {group.name}: {channel_list}")
+        else:
+            logger.info("No sync groups configured")
 
     async def _on_ready(self) -> None:
         """Called when the bot is ready and connected."""
