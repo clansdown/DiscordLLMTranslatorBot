@@ -25,22 +25,12 @@ git clone https://github.com/yourusername/DiscordLLMTranslatorBot.git
 cd DiscordLLMTranslatorBot
 ```
 
-2. Create a virtual environment:
+2. Run the install script (installs uv and dependencies):
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+./install.sh
 ```
 
-3. Install dependencies:
-```bash
-pip install -e .
-```
-
-4. Copy and configure the sample config:
-```bash
-cp config.sample.toml config.toml
-# Edit config.toml with your settings
-```
+3. Edit `config.toml` with your Discord token and OpenRouter API key.
 
 ## Configuration
 
@@ -70,12 +60,13 @@ See `config.sample.toml` for all available options with documentation.
 ## Running the Bot
 
 ```bash
-python -m discord_llm_translator
+./run.sh
 ```
 
-Or install as a package and run:
+Or manually:
 ```bash
-discord-translator
+source .venv/bin/activate
+python -m discord_llm_translator
 ```
 
 ## Environment Variables
@@ -87,12 +78,7 @@ The following environment variables can be used instead of config values:
 
 ## Development
 
-Install dev dependencies:
-```bash
-pip install -e ".[dev]"
-```
-
-Run linting:
+After installation, run linting:
 ```bash
 ruff check src/
 ```

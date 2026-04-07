@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Final
 
-import tomli
+import tomllib
 
 from discord_llm_translator.constants import (
     DEFAULT_LANGUAGE_CONFIDENCE_THRESHOLD,
@@ -68,7 +68,7 @@ class BotConfig:
     def from_file(cls, file_path: Path) -> BotConfig:
         """Load configuration from a TOML file."""
         with file_path.open("rb") as f:
-            raw_config = tomli.load(f)
+            raw_config = tomllib.load(f)
 
         discord_token = cls._get_string_or_env(
             raw_config, "discord_token", "DISCORD_TOKEN"

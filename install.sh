@@ -17,7 +17,7 @@ uv venv
 
 # Install dependencies
 echo "Installing dependencies..."
-uv pip install -e ".[dev]"
+uv pip install -e . --extra dev
 
 # Copy config if needed
 if [ ! -f config.toml ]; then

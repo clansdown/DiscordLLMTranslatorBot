@@ -28,7 +28,6 @@ dependencies = [
     "discord.py>=2.4.0",
     "aiohttp>=3.9.0",
     "langdetect>=1.0.9",
-    "tomli>=2.0.1",
 ]
 
 [project.optional-dependencies]
@@ -39,7 +38,7 @@ dev = [
 ]
 
 [project.scripts]
-discord-translator = "discord_llm_translator.__main__:main"
+discord-translator = "discord_llm_translator.__main__:main_wrapper"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/discord_llm_translator"]
