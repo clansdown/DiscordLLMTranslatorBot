@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from dataclasses import dataclass
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -72,6 +72,12 @@ class TranslationHandler:
         )
         self._processed_messages: set[int] = set()
         self._lock = asyncio.Lock()
+        
+        self._max_groups = 64000
+        self._translation_groups: dict[int, dict[int, int]] = {}
+        self._message_to_group: dict[int, int] = {}
+        self._group_order: list[int] = []
+        self._mapping_lock = asyncio.Lock()
 
     async def on_message(self, message: discord.Message) -> None:
         """Handle incoming messages."""
@@ -175,6 +181,23 @@ class TranslationHandler:
             logger.debug(f"User {message.author.id} rate limited, skipping message {message.id}")
             return
 
+        parent_message_ids: dict[int, int] | None = None
+        if message.reference and message.reference.message_id:
+            parent_id = message.reference.message_id
+            async with self._mapping_lock:
+                if parent_id in self._message_to_group:
+                    parent_group_key = self._message_to_group[parent_id]
+                    parent_message_ids = self._translation_groups.get(parent_group_key)
+                    if parent_message_ids:
+                        logger.debug(f"Message {message.id} is a reply to message {parent_id}, "
+                                   f"which has translations in channels: {list(parent_message_ids.keys())}")
+
+        await self._store_message_mapping(
+            original_message_id=message.id,
+            channel_id=message.channel.id,
+            translation_message_id=message.id,
+        )
+
         text_to_translate = message.content
         if self._config.max_chars > 0:
             text_to_translate = truncate_text(text_to_translate, self._config.max_chars)
@@ -191,6 +214,10 @@ class TranslationHandler:
             target_lang_name = get_language_name(target_channel_config.language)
             logger.info(f"Translating message {message.id} to {target_lang_name} for channel {target_channel_config.channel_id}")
 
+            parent_id_in_target: int | None = None
+            if parent_message_ids:
+                parent_id_in_target = parent_message_ids.get(target_channel_config.channel_id)
+
             request = TranslationRequest(
                 text=text_to_translate,
                 source_language=source_channel_config.language,
@@ -202,6 +229,7 @@ class TranslationHandler:
                 message=message,
                 target_channel_id=target_channel_config.channel_id,
                 translation_request=request,
+                parent_message_id=parent_id_in_target,
             )
             tasks.append(task)
 
@@ -214,6 +242,7 @@ class TranslationHandler:
         message: discord.Message,
         target_channel_id: int,
         translation_request: TranslationRequest,
+        parent_message_id: int | None = None,
     ) -> None:
         """Translate a message and send it to a target channel."""
         try:
@@ -225,15 +254,55 @@ class TranslationHandler:
                 logger.warning(f"Target channel {target_channel_id} not found or not a text channel")
                 return
 
-            translated_text = f"**[{message.author.display_name}] {result.translated_text}**"
-            await target_channel.send(translated_text)
-            logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
+            translated_text = f"**[{message.author.display_name}]** {result.translated_text}"
+            
+            posted_message: discord.Message | None = None
+            if parent_message_id:
+                try:
+                    parent_msg = await target_channel.fetch_message(parent_message_id)
+                    posted_message = await parent_msg.reply(translated_text, mention_author=False)
+                    logger.info(f"Posted reply translation to channel {target_channel_id} for message {message.id}")
+                except discord.NotFound:
+                    logger.warning(f"Parent message {parent_message_id} not found in channel {target_channel_id}, posting as new message")
+                    posted_message = await target_channel.send(translated_text)
+                    logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
+            else:
+                posted_message = await target_channel.send(translated_text)
+                logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
+
+            await self._store_message_mapping(
+                original_message_id=message.id,
+                channel_id=target_channel_id,
+                translation_message_id=posted_message.id,
+            )
 
         except Exception as e:
             logger.error(
                 f"Failed to translate message {message.id} to channel "
                 f"{target_channel_id}: {e}"
             )
+
+    async def _store_message_mapping(
+        self,
+        original_message_id: int,
+        channel_id: int,
+        translation_message_id: int,
+    ) -> None:
+        """Store the mapping between original message and its translations."""
+        async with self._mapping_lock:
+            if original_message_id not in self._translation_groups:
+                self._translation_groups[original_message_id] = {}
+                self._group_order.append(original_message_id)
+            
+            self._translation_groups[original_message_id][channel_id] = translation_message_id
+            self._message_to_group[translation_message_id] = original_message_id
+            
+            while len(self._group_order) > self._max_groups:
+                oldest_group_key = self._group_order.pop(0)
+                if oldest_group_key in self._translation_groups:
+                    for _channel_id, msg_id in self._translation_groups[oldest_group_key].items():
+                        self._message_to_group.pop(msg_id, None)
+                    del self._translation_groups[oldest_group_key]
 
     async def _send_translation_reply(
         self,
