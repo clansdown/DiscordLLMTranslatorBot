@@ -5,8 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import TYPE_CHECKING
 
-from langdetect import LangDetectException
-from langdetect.detect import detect_langs
+from langdetect import LangDetectException, detect_langs
 
 from discord_llm_translator.models.translation import LanguageDetectionResult
 
