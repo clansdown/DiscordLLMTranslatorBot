@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 from typing import TYPE_CHECKING
@@ -21,8 +22,19 @@ from discord_llm_translator.utils.formatting import get_language_name
 if TYPE_CHECKING:
     pass
 
+
+def _get_log_level() -> int:
+    """Determine log level from environment variables."""
+    if os.environ.get("DEBUG"):
+        return logging.DEBUG
+    log_level_name = os.environ.get("LOG_LEVEL", "INFO").upper()
+    return getattr(logging, log_level_name, logging.INFO)
+
+
+LOG_LEVEL = _get_log_level()
+
 logging.basicConfig(
-    level=logging.INFO,
+    level=LOG_LEVEL,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
