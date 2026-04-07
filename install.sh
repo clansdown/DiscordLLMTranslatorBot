@@ -11,13 +11,20 @@ if ! command -v uv &> /dev/null; then
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
+# Clear previous installation if exists
+if [ -d ".venv" ]; then
+    echo "Removing previous virtual environment..."
+    rm -rf .venv
+fi
+
 # Create virtual environment
 echo "Creating virtual environment..."
 uv venv
 
 # Install dependencies
 echo "Installing dependencies..."
-uv pip install -e . --extra dev
+uv pip install -e .
+uv pip install ruff mypy pyright
 
 # Copy config if needed
 if [ ! -f config.toml ]; then
