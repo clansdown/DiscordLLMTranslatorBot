@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 import discord
+from discord.ext.commands import Bot
 
 from discord_llm_translator.config import (
     BotConfig,
@@ -55,7 +56,7 @@ class TranslationHandler:
 
     def __init__(
         self,
-        client: discord.Client,
+        client: Bot,
         config: BotConfig,
         openrouter_client: OpenRouterClient,
         language_detector: LanguageDetector,

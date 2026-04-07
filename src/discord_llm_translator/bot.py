@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 import discord
 from discord import Intents
+from discord.ext.commands import Bot
 
 from discord_llm_translator.config import BotConfig
 from discord_llm_translator.cogs.translation import TranslationHandler
@@ -35,8 +36,7 @@ class DiscordTranslatorBot:
         self._config = config
         self._intents = Intents.default()
         self._intents.message_content = True
-        self._client = discord.Client(intents=self._intents)
-        self._tree = discord.app_commands.CommandTree(self._client)
+        self._client = Bot(intents=self._intents, command_prefix="")
         self._openrouter_client: OpenRouterClient | None = None
         self._language_detector: LanguageDetector | None = None
         self._translation_handler: TranslationHandler | None = None
@@ -70,8 +70,6 @@ class DiscordTranslatorBot:
     async def _on_ready(self) -> None:
         """Called when the bot is ready and connected."""
         logger.info(f"Bot connected as {self._client.user}")
-        await self._tree.sync()
-        logger.info("Commands synced")
         self._ready_event.set()
 
     async def start(self) -> None:
