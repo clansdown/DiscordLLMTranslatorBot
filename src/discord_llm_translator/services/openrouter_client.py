@@ -15,6 +15,7 @@ from discord_llm_translator.models.translation import (
     TranslationRequest,
     TranslationResult,
 )
+from discord_llm_translator.utils.formatting import get_language_name
 
 
 class OpenRouterError(Exception):
@@ -90,8 +91,8 @@ class OpenRouterClient:
             OpenRouterRateLimitError: If rate limited.
         """
         system_prompt = request.system_prompt.format(
-            source_language=request.source_language,
-            target_language=request.target_language,
+            source_language=get_language_name(request.source_language),
+            target_language=get_language_name(request.target_language),
         )
 
         messages: list[dict[str, str]] = [
