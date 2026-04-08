@@ -198,6 +198,28 @@ class TranslationHandler:
             translation_message_id=message.id,
         )
 
+        image_urls: list[str] = []
+        media_urls: list[str] = []
+        for attachment in message.attachments:
+            if attachment.content_type:
+                if attachment.content_type.startswith("image/"):
+                    image_urls.append(attachment.url)
+                elif attachment.content_type.startswith("video/") or attachment.content_type.startswith("audio/"):
+                    media_urls.append(attachment.url)
+                else:
+                    media_urls.append(attachment.url)
+            elif attachment.filename.lower().endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg")):
+                image_urls.append(attachment.url)
+            else:
+                media_urls.append(attachment.url)
+
+        sticker_urls: list[str] = []
+        for sticker in message.stickers:
+            if sticker.url:
+                sticker_urls.append(sticker.url)
+
+        original_embeds: list[discord.Embed] = list(message.embeds)
+
         text_to_translate = message.content
         if self._config.max_chars > 0:
             text_to_translate = truncate_text(text_to_translate, self._config.max_chars)
@@ -230,6 +252,10 @@ class TranslationHandler:
                 target_channel_id=target_channel_config.channel_id,
                 translation_request=request,
                 parent_message_id=parent_id_in_target,
+                image_urls=image_urls,
+                media_urls=media_urls,
+                sticker_urls=sticker_urls,
+                original_embeds=original_embeds,
             )
             tasks.append(task)
 
@@ -243,6 +269,10 @@ class TranslationHandler:
         target_channel_id: int,
         translation_request: TranslationRequest,
         parent_message_id: int | None = None,
+        image_urls: list[str] | None = None,
+        media_urls: list[str] | None = None,
+        sticker_urls: list[str] | None = None,
+        original_embeds: list[discord.Embed] | None = None,
     ) -> None:
         """Translate a message and send it to a target channel."""
         try:
@@ -255,19 +285,53 @@ class TranslationHandler:
                 return
 
             translated_text = f"**[{message.author.display_name}]** {result.translated_text}"
-            
+
+            embeds: list[discord.Embed] = []
+
+            for url in (image_urls or []):
+                embed = discord.Embed()
+                embed.set_image(url=url)
+                embeds.append(embed)
+                if len(embeds) >= 10:
+                    break
+
+            if len(embeds) < 10:
+                for url in (sticker_urls or []):
+                    embed = discord.Embed()
+                    embed.set_image(url=url)
+                    embeds.append(embed)
+                    if len(embeds) >= 10:
+                        break
+
+            if len(embeds) < 10 and original_embeds:
+                remaining_slots = 10 - len(embeds)
+                embeds.extend(original_embeds[:remaining_slots])
+
+            if media_urls:
+                translated_text += "\n" + "\n".join(media_urls)
+
             posted_message: discord.Message | None = None
             if parent_message_id:
                 try:
                     parent_msg = await target_channel.fetch_message(parent_message_id)
-                    posted_message = await parent_msg.reply(translated_text, mention_author=False)
+                    posted_message = await parent_msg.reply(
+                        translated_text,
+                        embeds=embeds if embeds else None,
+                        mention_author=False
+                    )
                     logger.info(f"Posted reply translation to channel {target_channel_id} for message {message.id}")
                 except discord.NotFound:
                     logger.warning(f"Parent message {parent_message_id} not found in channel {target_channel_id}, posting as new message")
-                    posted_message = await target_channel.send(translated_text)
+                    posted_message = await target_channel.send(
+                        translated_text,
+                        embeds=embeds if embeds else None
+                    )
                     logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
             else:
-                posted_message = await target_channel.send(translated_text)
+                posted_message = await target_channel.send(
+                    translated_text,
+                    embeds=embeds if embeds else None
+                )
                 logger.info(f"Posted translation to channel {target_channel_id} for message {message.id}")
 
             await self._store_message_mapping(
